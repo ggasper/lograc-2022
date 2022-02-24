@@ -467,7 +467,6 @@ _+ᵇ_ a b = bin-add-aux a b false
       bin-add-aux (x I) (y O) false = (bin-add-aux x y false) I
       bin-add-aux (x I) (y I) true = (bin-add-aux x y true) I
       bin-add-aux (x I) (y I) false = (bin-add-aux x y true) O
-
 _*ᵇ_ : Bin → Bin → Bin
 a *ᵇ ⟨⟩ = ⟨⟩ O
 a *ᵇ (b O) = (a *ᵇ b) O
