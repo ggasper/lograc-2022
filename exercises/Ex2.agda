@@ -596,7 +596,10 @@ data _∈_ (n : ℕ) : Tree ℕ → Set where
 
 insert-∈ : (t : Tree ℕ) → (n : ℕ) → n ∈ (insert t n)
 insert-∈ empty n = x∈n
-insert-∈ (node l x r) n = {!!}
+insert-∈ (node l x r) n with (test-</≡/> n x)
+... | n<m x₁ = x∈l (insert-∈ l n)
+... | n≡m x₁ rewrite x₁ = x∈n
+... | n>m x₁ = x∈r (insert-∈ r n)
 
 
 -----------------------------------
