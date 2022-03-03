@@ -795,7 +795,7 @@ insert-bst (node l x r) n (node-bst x₂ x₃) | n>m x₁ = node-bst x₂ (inser
    prove, relating element-wise equality of vectors to the `≡` relation
    on vectors, etc. So we suggest you leave this one for the very last.
 -}
-
+{-
 data _≡ⱽ_ : {A : Set} {n : ℕ} → Vec A n → Vec A n → Set where
   []≡ⱽ[] : [] ≡ⱽ []
   s≡ⱽs : {A : Set} → {n : ℕ}  →  (x : A) → (u : Vec A n)  → (x ∷ u) ≡ⱽ (x ∷ u)
@@ -803,8 +803,10 @@ data _≡ⱽ_ : {A : Set} {n : ℕ} → Vec A n → Vec A n → Set where
 vector-≡ⱽ-≡ : {A : Set} {n : ℕ} → {u v : Vec A n} → (u ≡ⱽ v) → (u ≡ v)
 vector-≡ⱽ-≡ {u = []} {[]} p = refl
 vector-≡ⱽ-≡ {u = x ∷ u} {.x ∷ .u} (s≡ⱽs .x .u) = refl
-
-
+-}
+subst-vec : {A : Set} → {n : ℕ} → {m : ℕ} → (p : (n ≡ m)) → (x : A) → (v : Vec A n) → subst (Vec A) (cong suc p) (x ∷ v) ≡ x ∷ (subst (Vec A) p v)
+subst-vec refl x [] = refl
+subst-vec refl x (x₁ ∷ v) = refl
 
 vec-list-vec : {A : Set} {n : ℕ}
              → list-vec ∘ vec-list ≡ λ (v : Vec A n) → subst (Vec A) (vec-list-length v) v 
@@ -813,7 +815,7 @@ vec-list-vec = fun-ext vcv-aux
   where
     vcv-aux : {A : Set} {n : ℕ} → (x : Vec A n) → (list-vec ∘ vec-list) x ≡ subst (Vec A) (vec-list-length x) x
     vcv-aux [] = refl
-    vcv-aux {A} (x ∷ v) = {!!}
+    vcv-aux {A} (x ∷ v) rewrite (subst-vec ( (vec-list-length v)) x v) = cong (x ∷_) (vcv-aux v)
 -----------------------------------
 -----------------------------------
 -- MOST INVOLVED EXERCISES [END] --
