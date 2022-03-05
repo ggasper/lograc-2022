@@ -66,9 +66,12 @@ postulate fun-ext : ∀ {a b} → Extensionality a b
    Define a function that extracts the first `n` elements from a
    vector of length `n + m`, using recursion and pattern-matching.
 -}
-
 take-n : {A : Set} {n m : ℕ} → Vec A (n + m) → Vec A n
-take-n xs = {!!}
+take-n {n = zero} xs = []
+take-n {n = suc n} (x ∷ xs) = x ∷ take-n xs
+
+
+
 
 {-
    Now define a function that extracts the first `n` elements from a
@@ -81,8 +84,22 @@ take-n xs = {!!}
    `Data.Nat.Properties` module could be useful for defining `take-n'`.
 -}
 
+n+0=n : (n : ℕ) → (n + 0 ≡ n)
+n+0=n zero = refl
+n+0=n (suc n) = cong suc (n+0=n n)
+
+snm=nsm : (n m : ℕ) → (suc n + m ≡ n + suc m)
+snm=nsm zero m = cong suc refl
+snm=nsm (suc n) m = cong suc (snm=nsm n m)
+
 take-n' : {A : Set} {n m : ℕ} → Vec A (m + n) → Vec A n
-take-n' xs = {!!}
+take-n' {A} {m} {n} xs = take-n ( subst (Vec _) (n+m=m+n m n) xs)
+  where
+    n+m=m+n : (m n : ℕ) → (n + m ≡ m + n)
+    n+m=m+n m zero = sym (n+0=n m)
+    n+m=m+n m (suc n) rewrite (n+m=m+n m n) = snm=nsm m n
+
+
 
 
 ----------------
@@ -116,8 +133,13 @@ list-vec (x ∷ xs) = x ∷ list-vec xs
 
 list-vec-list : {A : Set}
               → vec-list ∘ list-vec ≡ id {A = List A}
+              
+list-vec-list = fun-ext  list-vec-list-aux
+  where
+    list-vec-list-aux : {A : Set} → (xs : List A) → ((vec-list ∘ list-vec) xs ≡ id xs)
+    list-vec-list-aux [] = refl
+    list-vec-list-aux (x ∷ xs) = cong (λ {ys → x ∷ ys}) ( list-vec-list-aux xs)
 
-list-vec-list = {!!}
 
 {-
    Note: The dual lemma, showing that `list-vec` is the left inverse
@@ -155,7 +177,8 @@ lookup-total-Σ : {A : Set} {n : ℕ}
                → i < n
                → Σ[ x ∈ A ] (lookup xs i ≡ just x)
 
-lookup-total-Σ xs i p = {!!}
+lookup-total-Σ (x ∷ xs) zero p = x , refl
+lookup-total-Σ (x ∷ xs) (suc i) (s≤s p) = lookup-total-Σ xs i p
 
 
 ----------------
@@ -173,7 +196,9 @@ lookup-total-Σ xs i p = {!!}
 -}
 
 vec-list-Σ : {A : Set} {n : ℕ} → Vec A n → Σ[ xs ∈ List A ] (length xs ≡ n)
-vec-list-Σ xs = {!!}
+vec-list-Σ [] = [] , refl
+vec-list-Σ (x ∷ xs) with (vec-list-Σ xs)
+... | l , p = (x ∷ l) , cong suc p
 
 
 ----------------
@@ -199,8 +224,16 @@ list-ext : {A : Set} {xs ys : List A}
               → safe-list-lookup xs i p ≡ safe-list-lookup ys i q)
          → xs ≡ ys
 
-list-ext = {!!}
-
+list-ext {xs = []} {[]} pl f = refl
+list-ext {xs = x ∷ xs} {x₁ ∷ ys} pl f  =
+  begin
+    (x ∷ xs) ≡⟨ cong (_∷ xs ) (f 0 (s≤s z≤n) (s≤s z≤n)) ⟩
+    x₁ ∷ xs ≡⟨ cong (x₁ ∷_) (list-ext (suc-inj pl) λ i p q → f (suc i) (s≤s p) (s≤s q)) ⟩
+    x₁ ∷ ys
+  ∎
+  where
+    suc-inj : {n m : ℕ} → _≡_ {A = ℕ} (suc n) (suc m) → n ≡ m
+    suc-inj refl = refl
 {-
    Notice that we have generalised this statement a bit compared
    to what one would have likely written down in the first place.
@@ -250,7 +283,13 @@ open _≃_
           ≃
           Σ[ xy ∈ Σ[ x ∈ A ] (B x) ] (C (proj₁ xy) (proj₂ xy))
         
-Σ-assoc = {!!}
+Σ-assoc = record
+  {
+  to = λ { ( x , ( y , z ) ) → (x , y) , z };
+  from = λ { ((x , y) , z) → x , y , z} ;
+  from∘to = λ xyz → refl ;
+  to∘from = λ xyz → refl
+  }
 
 {-
    Second, prove the same thing using copatterns. For a reference on copatterns,
@@ -262,7 +301,10 @@ open _≃_
           ≃
           Σ[ xy ∈ Σ[ x ∈ A ] (B x) ] (C (proj₁ xy) (proj₂ xy))
 
-Σ-assoc' = {!!}
+to Σ-assoc' (x , y , z) = ( x , y ) , z
+from Σ-assoc' ((x , y) , z) =  x , y , z
+from∘to Σ-assoc' xyz = refl
+to∘from Σ-assoc' xyz = refl
 
 
 ----------------
@@ -277,8 +319,26 @@ open _≃_
 -}
 
 ≃-List : {A B : Set} → A ≃ B → List A ≃ List B
-≃-List = {!!}
+≃-List p = record
+  {
+  to = map (to p) ;
+  from = map (from p) ;
+  from∘to = λ xs → 
+    begin
+      map (from p) (map (to p) xs) ≡⟨ sym (map-compose xs) ⟩
+      map ((from p) ∘ (to p)) xs ≡⟨ cong (λ f → map f xs) (fun-ext (from∘to p)) ⟩
+      map id xs ≡⟨ map-id xs ⟩
+      xs
 
+    ∎ ;
+  to∘from = λ xs →
+    begin
+      map (to p) (map (from p) xs) ≡⟨ sym (map-compose xs) ⟩
+      map (to p ∘ from p) xs ≡⟨ cong (λ f → map f xs) (fun-ext (to∘from p)) ⟩
+      map id xs ≡⟨ map-id xs ⟩
+      xs
+    ∎
+  }
 
 ----------------
 -- Exercise 8 --
@@ -303,9 +363,24 @@ open DecSet
    Given a type with decidable equality, prove that a list holding
    elements of this type is itself a type with decidable equality.
 -}
+++-inj : {A : Set} → (xs ys : List A) → (x : A)→ (_≡_ {A = List A} (x ∷ xs) (x ∷ ys)) → (xs ≡ ys)
+++-inj xs .xs x refl = refl
+
+++-linj : {A : Set} → (xs ys : List A) → (x y : A) → (_≡_ {A = List A} (x ∷ xs) (y ∷ ys)) → (x ≡ y)
+++-linj xs .xs x .x refl = refl
 
 DecList : (DS : DecSet) → Σ[ DS' ∈ DecSet ] (DSet DS' ≡ List (DSet DS))
-DecList DS = {!!}
+DecList DS = (record { DSet = List (DSet DS) ; test-≡ = test-aux }) , refl
+  where
+    test-aux : (x y : List (DSet DS)) → Dec (x ≡ y)
+    test-aux [] [] = yes refl
+    test-aux [] (x ∷ y) = no λ ()
+    test-aux (x ∷ x₁) [] = no λ ()
+    test-aux (x ∷ xs) (y ∷ ys) with ((test-≡ DS) x y) | (test-aux xs ys)
+    ... | yes z | yes x₂ rewrite z = yes (cong (y ∷_) x₂ )
+    ... | yes x₁ | no x₂ rewrite x₁ = no λ x → x₂ (++-inj xs ys y x)
+    ... | no x₁ | yes x₂ rewrite x₂ = no λ z → x₁ (++-linj ys ys x y z)
+    ... | no x₁ | no x₂ = no λ z → x₁ (++-linj xs ys x y z)
 
 
 ----------------
@@ -376,19 +451,25 @@ data _∈_ {A : Set} : A → List A → Set where
 
 data NoDup {A : Set} : List A → Set where
   {- EXERCISE: replace this comment with constructors for `NoDup` -}
+  []-nodup : NoDup []
+  ∷-nodup : {x : A} {xs : List A} → NoDup xs → ¬ (x ∈ xs) → NoDup (x ∷ xs)
 
 {-
    Next, prove some sanity-checks about the correctness of `NoDup`.
 -}
 
 nodup-test₁ : NoDup {ℕ} []
-nodup-test₁ = {!!}
+nodup-test₁ = []-nodup
 
 nodup-test₂ : NoDup (4 ∷ 2 ∷ [])
-nodup-test₂ = {!!}
+nodup-test₂ = ∷-nodup (∷-nodup []-nodup (λ ())) λ x → nodup-aux x
+  where
+    nodup-aux : (4 ∈ 2 ∷ []) → ⊥
+    nodup-aux (∈-there ())
+
 
 nodup-test₃ : ¬ (NoDup (4 ∷ 2 ∷ 4 ∷ []))
-nodup-test₃ = {!!}
+nodup-test₃ (∷-nodup x x₁) = x₁ (∈-there ∈-here)
 
 {-
    Finally, prove that `add` preserves the no-duplicates property.
@@ -398,12 +479,24 @@ nodup-test₃ = {!!}
    actually already present in `xs` (When would this be the case?).
 -}
 
+exp : {DS : DecSet} → (x : DSet DS) → ⊥ → _∈_ {DSet DS} x []
+exp x ()
+
 add-nodup : {DS : DecSet} → (xs : List (DSet DS)) → (x : DSet DS)
           → NoDup {DSet DS} xs
           → NoDup {DSet DS} (add {DS} xs x)
 
-add-nodup xs x' p = {!!}
-
+add-nodup [] x' p = ∷-nodup p λ ()
+add-nodup {DS} (x ∷ xs) x' p with (test-≡ DS x x')
+add-nodup {DS} (x ∷ xs) .x (∷-nodup p x₁) | yes refl = ∷-nodup p x₁
+add-nodup {DS} (x ∷ xs) x' (∷-nodup p x₂) | no x₁ = ∷-nodup (add-nodup xs x' p) λ z → x₂ (add-aux x x' xs x₁ z)
+  where
+    add-aux : (x x' : DSet DS) → (xs : List (DSet DS)) → (¬ (x ≡ x')) → (x ∈ add {DS} xs x') → (x ∈ xs)
+    add-aux x .x [] p ∈-here = exp {DS} x (p refl)
+    add-aux x x' (x₁ ∷ xs) p q with (test-≡ DS x₁ x')
+    ... | yes refl = q
+    add-aux .x₁ x' (x₁ ∷ xs) p ∈-here | no x₂ = ∈-here
+    add-aux x x' (x₁ ∷ xs) p (∈-there q) | no x₂ = ∈-there (add-aux x x' xs p q)
 
 -----------------
 -- Exercise 10 --
@@ -459,6 +552,36 @@ from-bin' b = from-bin'-aux b 0
 -}
 
 open import Data.Nat.Properties
+from-bin-aux : (b : Bin) → (n : ℕ) → (2 ^ n) * from-bin b ≡ from-bin'-aux b n
+from-bin-aux ⟨⟩ n rewrite (*-zeroʳ (2 ^ n)) = refl
+from-bin-aux (b O) n =
+  begin
+    (2 ^ n) * from-bin (b O) ≡⟨ refl ⟩
+    -- (2 ^ n) * (from-bin b + (from-bin b + 0)) ≡⟨ cong (λ x → (2 ^ n) * (from-bin b + x)) (+-identityʳ (from-bin b)) ⟩
+    (2 ^ n) * (from-bin b + (from-bin b + 0)) ≡⟨ refl ⟩
+    (2 ^ n) * (2 * (from-bin b)) ≡⟨ sym ( *-assoc (2 ^ n) 2 (from-bin b)) ⟩
+    ((2 ^ n) * 2) * (from-bin b) ≡⟨ refl ⟩
+    ((2 ^ n) * (2 ^ 1)) * (from-bin b) ≡⟨ cong (_* (from-bin b)) (*-comm (2 ^ n) 2) ⟩
+    ((2 ^ 1) * (2 ^ n)) * (from-bin b) ≡⟨ cong ( _* (from-bin b)) (sym (^-distribˡ-+-* 2 1 n)) ⟩
+    (2 ^ (suc n)) * (from-bin b) ≡⟨ from-bin-aux b (suc n) ⟩
+    from-bin'-aux b (suc n)
+  ∎
+from-bin-aux (b I) n =
+  begin
+    (2 ^ n) * suc (from-bin b + (from-bin b + zero)) ≡⟨ *-suc (2 ^ n) (from-bin b + (from-bin b + zero)) ⟩
+    (2 ^ n) + (2 ^ n) * (from-bin b + (from-bin b + zero)) ≡⟨ refl ⟩
+    (2 ^ n) + (2 ^ n) * (2 * (from-bin b)) ≡⟨ cong ( (2 ^ n) +_) (sym (*-assoc (2 ^ n) 2 (from-bin b))) ⟩
+    (2 ^ n) + ((2 ^ n) * 2) * (from-bin b) ≡⟨ cong (λ (x : ℕ) → (2 ^ n) + (x * (from-bin b))) (*-comm (2 ^ n) 2)  ⟩
+    (2 ^ n) + (2 * (2 ^ n)) * (from-bin b) ≡⟨ cong ((2 ^ n) +_) (from-bin-aux b (suc n)) ⟩
+    (2 ^ n) + from-bin'-aux b (suc n)
+  ∎
+
 
 from-bin-≡ : (b : Bin) → from-bin b ≡ from-bin' b
-from-bin-≡ b = {!!}
+from-bin-≡ b =
+  begin
+    from-bin b ≡⟨ sym (+-identityʳ (from-bin b)) ⟩
+     (2 ^ 0) * (from-bin b)  ≡⟨ from-bin-aux b 0 ⟩
+    from-bin'-aux b zero ≡⟨ refl ⟩
+    from-bin'-aux b zero
+  ∎
