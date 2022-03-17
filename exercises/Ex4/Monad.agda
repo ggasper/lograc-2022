@@ -80,20 +80,29 @@ record Monad {l} : Set (lsuc l) where
    For background: In PL, the writer monad is used to model the
    computational effect of writing/outputting elements of a monoid.
 -}
-
 module _ {l} (Mon : Monoid {l}) where
-
   open Monoid Mon
   
   Writer : Monad {l}
   Writer = record {
     T         = λ X → M × X ;
-    η         = {!!} ;
-    _>>=_     = {!!} ;
-    η-left    = {!!} ;
-    η-right   = {!!} ;
-    >>=-assoc = {!!} }
-
+    η         = λ x → (Monoid.ε Mon , x) ;
+    _>>=_     = λ (m , x) f → (proj₁ (f x) · m) , proj₂ (f x) ;
+    η-left    = λ {X Y} m f →
+    begin
+    proj₁ (f m) · ε , proj₂ (f m) ≡⟨  cong (_, proj₂ (f m)) (ε-right (proj₁ (f m))) ⟩
+    proj₁ (f m) , proj₂ (f m) ≡⟨ refl ⟩
+    f m
+    ∎
+    ; 
+    η-right   = λ p →
+    begin
+    ε · proj₁ p , proj₂ p ≡⟨ cong (_, proj₂ p) (ε-left _) ⟩
+    proj₁ p , proj₂ p ≡⟨ refl ⟩
+    p
+    ∎
+    ;
+    >>=-assoc = λ p f g → cong₂ _,_ (sym (·-assoc (proj₁ (g (proj₂ (f (proj₂ p))))) (proj₁ (f (proj₂ p))) (proj₁ p)))  refl }
 
 ----------------
 -- Exercise 6 --
@@ -113,7 +122,8 @@ module _ {l} (Mon : Monoid {l}) where
   open Monad Writer
 
   write : {X : Set l} → T X → M → T X
-  write k m' = {!!}
+  write (m , x) m' = m · m' , x
+-- write m m' = m >>= (η m') 
 
 {-
    Prove that the `write` operation satisfies the equational theory
@@ -122,12 +132,17 @@ module _ {l} (Mon : Monoid {l}) where
 
   write-ε : {X : Set l} → (k : T X) → write k ε ≡ k
         
-  write-ε k = {!!}
+  write-ε k =
+    begin
+      write k ε ≡⟨ cong (_, proj₂ k) (ε-right _) ⟩
+      proj₁ k , proj₂ k ≡⟨ refl ⟩
+      k
+    ∎
 
   write-· : {X : Set l} → (k : T X) → (m m' : M)
           → write (write k m) m' ≡ write k (m · m')
  
-  write-· k m' m'' = {!!}
+  write-· k m' m'' = cong (_, (proj₂ k)) (·-assoc (proj₁ k) m' m'')
 
 
 ----------------
@@ -143,7 +158,15 @@ module _ {l} (Mon : Monoid {l}) where
 -}
 
 ToMonoid : (Mon : Monad {lzero}) → Monoid {lzero}
-ToMonoid Mon = {!!}
+ToMonoid Mon = record
+                 { M = T ⊤
+                 ; ε = η tt
+                 ; _·_ = λ x y → x >>= (λ _ → y)
+                 ; ε-left = λ m → η-left tt (λ _ → m)
+                 ; ε-right = λ m → η-right m
+                 ; ·-assoc = λ m₁ m₂ m₃ → >>=-assoc m₁ (λ _ → m₂) (λ _ → m₃)
+                 }
+         where open Monad Mon
 
 
 --------------------------
@@ -169,9 +192,37 @@ ToMonoid Mon = {!!}
    this additional structure as a record type (data + equational laws).
 -}
 
-module _ {l} (S : Set l) (Mon : Monoid {l}) (Act : {!!}) where
+record Action {l} (Mon : Monoid {l})  (S : Set l) : Set (lsuc l) where
+  open Monoid Mon
+  field
+    _·ᴬ_ : M → S → S
+    ·ᴬ-unit : (s : S) → ε ·ᴬ s ≡ s
+    ·ᴬ-hom : (s : S) → (m₁ m₂ : M) → m₁ ·ᴬ (m₂ ·ᴬ s) ≡ (m₁ · m₂) ·ᴬ s
+
+module _ {l} (S : Set l) (Mon : Monoid {l}) (Act : Action Mon S ) where
 
   open Monoid Mon
-
+  open Action Act
   Update : Monad {l}
-  Update = {!!}
+  Update = record
+             { T = λ X → S → M × X
+             ; η = λ x s → ε , x
+             ; _>>=_ = bind-aux
+             ; η-left = λ x f  → fun-ext (η-left-aux x f)
+             ; η-right = λ c → fun-ext (λ s → cong ( _, proj₂ (c s) ) (ε-right (proj₁ (c s))) )
+             ; >>=-assoc = λ c f g → fun-ext λ s → bind-assoc c f g s
+             }
+               where
+                 bind-aux : {X Y : Set l} → (S → M × X) → (X → S → M × Y) → S → M × Y 
+                 bind-aux f g s = let (m , x) = f s in let (m' , x') = g x (m ·ᴬ s) in (m · m') , x'
+
+                 η-left-aux : {X Y : Set l} → (x : X) → (f : X → S → M × Y) → (s : S) → bind-aux (λ z → ε , x) f s ≡ f x s
+                 η-left-aux x f s rewrite (·ᴬ-unit s) = cong (_, proj₂ (f x s)) (ε-left (proj₁ (f x s)))
+
+                 bind-assoc : {X Y Z : Set l} →
+                            (c : S → M × X) →
+                            (f : X → S → M × Y) →
+                            (g : Y → S → M × Z) →
+                            (s : S) →
+                            bind-aux (bind-aux c f) g s ≡ bind-aux c (λ x → bind-aux (f x) g) s
+                 bind-assoc c f g s = cong₂ _,_ {!·ᴬ-hom ? ? ?!} {!!}

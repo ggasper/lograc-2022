@@ -108,13 +108,15 @@ record Dictionary {l₁ l₂ l₃ : Level}
                          → lkp d k ≡ nothing
                          → lkp (add-if-new d (k , x)) k ≡ just x
                          
-  lkp-add-if-new-nothing k x d p = {!!}
+  lkp-add-if-new-nothing k x d p with lkp d k
+  ... | nothing = lkp-add-≡ k x d
 
   lkp-add-if-new-just : (k : Keys) (x x' : A) (d : Dict)
                       → lkp d k ≡ just x'
                       → lkp (add-if-new d (k , x)) k ≡ just x'
                       
-  lkp-add-if-new-just k x x' d p = {!!}
+  lkp-add-if-new-just k x x' d p with lkp d k | inspect (λ (d , k) → lkp d k) (d , k)
+  ... | just y | [ eq ] rewrite eq = p
 
 
 ----------------
@@ -139,13 +141,56 @@ module _ {l₁ l₂} (K : Key {l₁}) (A : Set l₂) where
   ListDict : Dictionary K A
   ListDict = record {
     Dict      = List (Keys × A) ;
-    emp       = {!!} ;
-    lkp       = {!!} ;
-    add       = {!!} ;
-    lkp-emp   = {!!} ;
-    lkp-add-≡ = {!!} ;
-    lkp-add-≢ = {!!} }
+    emp       = [] ;
+    lkp       = lkp-aux ;
+    add       = add-aux ;
+    lkp-emp   = λ k → refl ;
+    lkp-add-≡ = lkp-add-aux ;
+    lkp-add-≢ = lkp-add-neq-aux }
 
+    where
+      lkp-aux : List (Keys × A) → Keys → Maybe A
+      lkp-aux [] k = nothing
+      lkp-aux ((k' , y) ∷ l) k with test-keys k' k
+      ... | yes x = just y
+      ... | no x = lkp-aux l k
+
+      add-aux : List (Keys × A) → Keys × A → List (Keys × A)
+      add-aux [] (k , v) =  (k , v) ∷ []
+      add-aux ((k' , w) ∷ l) (k , v)  with test-keys k' k
+      ... | yes x = (k , v) ∷ l
+      ... | no x = (k' , w) ∷ add-aux l (k , v)
+
+      test-keys-refl : (k : Keys) → test-keys k k ≡ yes refl
+      test-keys-refl k with test-keys k k
+      ... | yes refl = refl
+      ... | no x = ⊥-elim (x refl)
+
+      lkp-add-aux : (k : Keys) (x : A) (d : List (Keys × A)) →
+                      lkp-aux (add-aux d (k , x)) k ≡ just x
+      lkp-add-aux k x [] rewrite test-keys-refl k = refl
+      lkp-add-aux k x ((k' , v) ∷ d) with test-keys k' k
+      ... | yes y rewrite test-keys-refl k = refl
+      ... | no y with test-keys k' k
+      ... | yes x₁ = ⊥-elim (y x₁)
+      ... | no x₁ = lkp-add-aux k x d
+
+
+      test-keys-neq : (k k' : Keys) → (p : k ≢ k') → test-keys k k' ≡ no p
+      test-keys-neq k k' p with test-keys k k'
+      ... | yes x = ⊥-elim (p x)
+      ... | no x = cong no (fun-ext (λ r → ⊥-elim (p r)))
+
+      lkp-add-neq-aux : (k k' : Keys) (x : A) (d : List (Keys × A)) →
+                          k ≢ k' → lkp-aux (add-aux d (k , x)) k' ≡ lkp-aux d k'
+      lkp-add-neq-aux k k' x [] p with test-keys k k'
+      ... | yes x₁ = ⊥-elim (p x₁)
+      ... | no x₁ = refl
+      lkp-add-neq-aux k k' x ((k'' , v) ∷ d) p with test-keys k k'' | test-keys k'' k'
+      ... | yes x₁ | yes refl = ⊥-elim (p x₁)
+      ... | yes refl | no x₂ rewrite test-keys-neq k' k (p ∘ sym) rewrite test-keys-refl k rewrite test-keys-neq k k' p = refl
+      ... | no x₁ | yes refl rewrite test-keys-neq k' k (p ∘ sym) rewrite test-keys-refl k' = refl
+      ... | no x₁ | no x₂ rewrite test-keys-neq k'' k (x₁ ∘ sym)  rewrite test-keys-neq k'' k' x₂ = lkp-add-neq-aux k k' x d p
 
 ----------------
 -- Exercise 3 --
@@ -188,8 +233,28 @@ module _ {l₁ l₂} (K : Key {l₁}) (A : Set l₂) where
   ListDict' : Dictionary' K A
   ListDict' = record {
     Dict'     = ListDict K A ;
-    add-add-≡ = {!!} }
+    add-add-≡ = add-add-aux }
+    where
+      test-keys-refl : (k : Keys) → test-keys k k ≡ yes refl
+      test-keys-refl k with test-keys k k
+      ... | yes refl = refl
+      ... | no x = ⊥-elim (x refl)
 
+      test-keys-neq : (k k' : Keys) → (p : k ≢ k') → test-keys k k' ≡ no p
+      test-keys-neq k k' p with test-keys k k'
+      ... | yes x = ⊥-elim (p x)
+      ... | no x = cong no (fun-ext (λ r → ⊥-elim (p r)))
+
+      add-add-aux : (k : Keys) (x x' : A) (d : Dictionary.Dict (ListDict K A)) →
+                      Dictionary.add (ListDict K A)
+                      (Dictionary.add (ListDict K A) d (k , x)) (k , x')
+                      ≡ Dictionary.add (ListDict K A) d (k , x')
+      add-add-aux k x x' [] with test-keys k k
+      ... | yes x₁ = refl
+      ... | no x₁ = ⊥-elim (x₁ refl)
+      add-add-aux k x x' ((k' , x'') ∷ d) with test-keys k' k
+      ... | yes x₁ rewrite test-keys-refl k = refl
+      ... | no x₁ rewrite test-keys-neq k' k x₁ = cong ((k' , x'') ∷_) (add-add-aux k x x' d)
 
 -------------------------------
 -- Bonus Dictionary Exercise --
@@ -225,3 +290,26 @@ record Dictionary'' {l₁ l₂ l₃ : Level}
    order-theoretic properties to be able to define a new variant of
    the `add` operation that satisfies the `add-add-≢` property.
 -}
+module _ {l₁ l₂} (K : Key {l₁}) (A : Set l₂) where
+
+  open Key K
+  open Dictionary'
+  open Dictionary''
+
+  ListDict'' : Dictionary'' K A
+  ListDict'' = record { Dict'' = ListDict' K A ; add-add-≢ = add-add-aux }
+    where
+      add-add-aux : (k k' : Keys) (x x' : A)
+                      (d : Dictionary.Dict (Dict' (ListDict' K A))) →
+                      k ≢ k' →
+                      Dictionary.add (Dict' (ListDict' K A))
+                      (Dictionary.add (Dict' (ListDict' K A)) d (k , x)) (k' , x')
+                      ≡
+                      Dictionary.add (Dict' (ListDict' K A))
+                      (Dictionary.add (Dict' (ListDict' K A)) d (k' , x')) (k , x)
+      add-add-aux k k' x x' [] p with test-keys k k' | test-keys k' k
+      ... | yes x₁ | yes x₂ = ⊥-elim (p (sym x₂))
+      ... | yes x₁ | no x₂ = ⊥-elim (p x₁)
+      ... | no x₁ | yes x₂ = ⊥-elim (p (sym x₂))
+      ... | no x₁ | no x₂ = {!!}
+      add-add-aux k k' x x' (x₁ ∷ d) p = {!!}
